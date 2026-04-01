@@ -4,6 +4,8 @@ Claude Buddy is an open-source terminal companion project inspired by the lightw
 
 It aims to provide a small, deterministic, local-first companion experience that can live beside a terminal AI workflow without depending on private services or proprietary backend logic.
 
+![Claude Buddy Screenshot](./assets/screenshot.png)
+
 The current prototype is a standalone Ink TUI that runs beside Claude Code in a separate terminal. Its default companion uses a pixel-style terminal sprite inspired by the blocky mascot shape from Claude Code's welcome screen.
 The default mascot is generated from a checked-in SVG asset, then rasterized into terminal characters at runtime.
 

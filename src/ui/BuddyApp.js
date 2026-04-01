@@ -26,6 +26,34 @@ function formatRelativeTime(timestamp) {
   return `${hours}h ago`
 }
 
+function getObserverSignalLabel(runtime, now) {
+  const signalType = runtime?.signalType || 'idle'
+  const recentSignalMs = runtime?.lastEventAt ? now - runtime.lastEventAt : Number.POSITIVE_INFINITY
+
+  if (signalType === 'process_up' && recentSignalMs < 2600) {
+    return { value: 'process started', color: 'cyan' }
+  }
+
+  if (signalType === 'process_down' && recentSignalMs < 2000) {
+    return { value: 'process stopped', color: 'yellow' }
+  }
+
+  if (signalType === 'transcript' && recentSignalMs < 2200) {
+    return { value: 'fresh transcript activity', color: 'cyan' }
+  }
+
+  if (runtime?.claudeActive) {
+    return { value: 'watching Claude', color: 'green' }
+  }
+
+  return { value: 'watching quietly', color: 'gray' }
+}
+
+function formatEventKind(kind) {
+  if (!kind) return 'none'
+  return kind.replaceAll('_', ' ')
+}
+
 function StatusLine({ label, value, color = 'white' }) {
   return h(
     Box,
@@ -93,9 +121,10 @@ function getCodingRigState(state, now) {
   const runtime = state.runtime || {}
   const signalType = runtime.signalType || 'idle'
   const recentSignalMs = runtime.lastEventAt ? now - runtime.lastEventAt : Number.POSITIVE_INFINITY
+  const hiddenRig = { visible: false, lines: [], color: 'cyan', suffix: '' }
 
   if (state.companion.muted) {
-    return { visible: false }
+    return hiddenRig
   }
 
   if (runtime.claudeActive) {
@@ -120,7 +149,7 @@ function getCodingRigState(state, now) {
     return { visible: true, lines, color: 'gray', suffix: '+ shutting down' }
   }
 
-  return { visible: false }
+  return hiddenRig
 }
 
 function SpritePanel({ state, now }) {
@@ -128,6 +157,7 @@ function SpritePanel({ state, now }) {
   const lines = getSpriteLines(state, now)
   const renderState = getSpriteRenderState(state, now)
   const rig = getCodingRigState(state, now)
+  const rigLines = Array.isArray(rig.lines) ? rig.lines : []
   const label = `${renderState.label || 'idle'} ${rig.suffix || ''}`.trim()
 
   return h(
@@ -151,7 +181,7 @@ function SpritePanel({ state, now }) {
         ? h(
             Box,
             { flexDirection: 'column' },
-            ...rig.lines.map((line, index) =>
+            ...rigLines.map((line, index) =>
               h(Text, { key: `rig:${index}:${line}`, color: rig.color || 'cyan' }, line),
             ),
           )
@@ -268,6 +298,9 @@ export function BuddyApp() {
   const compact = terminalWidth < 92
   const activityLabel = runtime.claudeActive ? 'active' : 'idle'
   const bubble = runtime.lastBubble || `${companion.name} is keeping quiet.`
+  const observerSignal = getObserverSignalLabel(runtime, now)
+  const eventKindLabel = formatEventKind(observation.latestEventKind)
+  const eventSummary = shortenMiddle(observation.latestEventSummary || 'none', 52)
 
   return h(
     Box,
@@ -331,17 +364,26 @@ export function BuddyApp() {
           }),
           h(StatusLine, {
             label: 'Signal',
-            value:
-              observation.changed
-                ? 'fresh transcript activity'
-                : observation.processChanged
-                  ? 'process state changed'
-                  : 'watching quietly',
-            color: observation.changed || observation.processChanged ? 'cyan' : 'gray',
+            value: observerSignal.value,
+            color: observerSignal.color,
           }),
           h(StatusLine, {
             label: 'Transcript',
             value: transcriptLabel,
+          }),
+          h(StatusLine, {
+            label: 'Event',
+            value: eventKindLabel,
+            color: observation.latestEventKind ? 'magenta' : 'gray',
+          }),
+          h(StatusLine, {
+            label: 'Entries',
+            value: String(observation.newEntriesCount || 0),
+            color: (observation.newEntriesCount || 0) > 0 ? 'cyan' : 'gray',
+          }),
+          h(StatusLine, {
+            label: 'Preview',
+            value: eventSummary,
           }),
           h(StatusLine, {
             label: 'Last Activity',

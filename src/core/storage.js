@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { createInitialState } from './companion.js'
+import { createInitialState, getCompanionStats } from './companion.js'
 
 export function getStatePath() {
   return join(homedir(), '.claude-buddy', 'state.json')
@@ -14,7 +14,25 @@ export function loadState() {
   }
 
   try {
-    return JSON.parse(readFileSync(statePath, 'utf8'))
+    const parsed = JSON.parse(readFileSync(statePath, 'utf8'))
+    if (!parsed?.companion) return createInitialState()
+
+    const companion = {
+      ...parsed.companion,
+      stats: getCompanionStats(parsed.companion),
+    }
+
+    const runtime = {
+      signalType: parsed?.runtime?.signalType || 'idle',
+      ...parsed.runtime,
+    }
+
+    return {
+      ...parsed,
+      version: Math.max(4, parsed.version || 1),
+      companion,
+      runtime,
+    }
   } catch {
     return createInitialState()
   }

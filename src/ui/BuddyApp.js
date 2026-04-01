@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import {
   applyObservation,
+  COMPANION_STAT_KEYS,
+  getCompanionStats,
   getCompanionAccent,
+  getRarityStars,
   getSpriteLines,
   getSpriteRenderState,
   petCompanion,
@@ -38,15 +41,36 @@ function shortenMiddle(text, maxLength = 42) {
   return `${text.slice(0, side)}...${text.slice(-side)}`
 }
 
-function Meter({ value, max = 12, color = 'green' }) {
-  const normalized = Math.max(0, Math.min(max, value))
-  const filled = '■'.repeat(normalized)
-  const empty = '·'.repeat(Math.max(0, max - normalized))
+function buildStatBar(value, width = 12) {
+  const clamped = Math.max(0, Math.min(99, Number(value) || 0))
+  const filled = Math.round((clamped / 99) * width)
+  return `${'█'.repeat(filled)}${'░'.repeat(Math.max(0, width - filled))}`
+}
+
+function formatSpeciesLabel(species) {
+  return (species || 'buddy').toUpperCase()
+}
+
+function StatsPanel({ companion, accent }) {
+  const stats = getCompanionStats(companion)
+  const rows = COMPANION_STAT_KEYS.map(key => ({
+    key,
+    label: key.toUpperCase(),
+    value: stats[key] || 0,
+  }))
+
   return h(
     Box,
-    null,
-    h(Text, { color }, filled),
-    h(Text, { dimColor: true }, empty),
+    { flexDirection: 'column', marginTop: 1 },
+    ...rows.map(row =>
+      h(
+        Box,
+        { key: row.key },
+        h(Text, { dimColor: true }, `${row.label.padEnd(10, ' ')}`),
+        h(Text, { color: accent }, ` ${buildStatBar(row.value)} `),
+        h(Text, { color: 'white' }, `${String(row.value).padStart(2, ' ')}`),
+      ),
+    ),
   )
 }
 
@@ -71,6 +95,31 @@ function SpritePanel({ state, now }) {
       h(Text, { key: `${index}:${line}`, color: accent }, line),
     ),
     h(Text, { dimColor: true }, label),
+  )
+}
+
+function ProfileCard({ state }) {
+  const accent = getCompanionAccent(state)
+  const { companion } = state
+  const stars = getRarityStars(companion.rarity)
+
+  return h(
+    Box,
+    {
+      borderStyle: 'round',
+      borderColor: 'cyan',
+      paddingX: 1,
+      flexDirection: 'column',
+    },
+    h(
+      Box,
+      { justifyContent: 'space-between' },
+      h(Text, { bold: true, color: accent }, `${stars} ${companion.rarity.toUpperCase()}`),
+      h(Text, { bold: true, color: 'blue' }, formatSpeciesLabel(companion.species)),
+    ),
+    h(Text, { bold: true, color: 'white' }, companion.name),
+    h(Text, { dimColor: true, italic: true }, `"${companion.personality}"`),
+    h(StatsPanel, { companion, accent }),
   )
 }
 
@@ -147,7 +196,6 @@ export function BuddyApp() {
     : 'none'
   const terminalWidth = process.stdout.columns || 100
   const compact = terminalWidth < 92
-  const affectionLevel = Math.min(12, Math.max(1, Math.round(companion.affection)))
   const activityLabel = runtime.claudeActive ? 'active' : 'idle'
   const bubble = runtime.lastBubble || `${companion.name} is keeping quiet.`
 
@@ -169,35 +217,32 @@ export function BuddyApp() {
         h(
           Box,
           {
-            borderStyle: 'round',
-            borderColor: 'cyan',
-            paddingX: 1,
             flexDirection: 'column',
           },
-          h(Text, { bold: true, color: 'cyan' }, 'Claude Buddy'),
-          h(Text, { bold: true }, companion.personality),
-          h(Text, { dimColor: true }, `Hatched ${formatRelativeTime(companion.hatchedAt)}`),
-          h(Box, { marginTop: 1 }, h(Text, { dimColor: true }, 'Affection')), 
-          h(Meter, { value: affectionLevel, color: 'magenta' }),
-          h(StatusLine, {
-            label: 'Mood',
-            value: companion.mood,
-            color: 'yellow',
-          }),
-          h(StatusLine, {
-            label: 'Rarity',
-            value: companion.rarity,
-            color: 'green',
-          }),
-          h(StatusLine, {
-            label: 'Muted',
-            value: companion.muted ? 'yes' : 'no',
-            color: companion.muted ? 'red' : 'green',
-          }),
-          h(StatusLine, {
-            label: 'Last Pet',
-            value: formatRelativeTime(companion.lastPetAt),
-          }),
+          h(ProfileCard, { state }),
+          h(
+            Box,
+            { marginTop: 1, borderStyle: 'round', borderColor: 'gray', paddingX: 1, flexDirection: 'column' },
+            h(StatusLine, {
+              label: 'Mood',
+              value: companion.mood,
+              color: 'yellow',
+            }),
+            h(StatusLine, {
+              label: 'Affection',
+              value: String(companion.affection),
+              color: 'magenta',
+            }),
+            h(StatusLine, {
+              label: 'Muted',
+              value: companion.muted ? 'yes' : 'no',
+              color: companion.muted ? 'red' : 'green',
+            }),
+            h(StatusLine, {
+              label: 'Hatched',
+              value: formatRelativeTime(companion.hatchedAt),
+            }),
+          ),
         ),
         h(
           Box,
@@ -224,7 +269,10 @@ export function BuddyApp() {
                   : 'watching quietly',
             color: observation.changed || observation.processChanged ? 'cyan' : 'gray',
           }),
-          h(StatusLine, { label: 'Transcript', value: transcriptLabel }),
+          h(StatusLine, {
+            label: 'Transcript',
+            value: transcriptLabel,
+          }),
           h(StatusLine, {
             label: 'Last Activity',
             value: formatRelativeTime(runtime.lastClaudeActivityAt),

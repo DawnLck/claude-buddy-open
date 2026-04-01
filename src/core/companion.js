@@ -52,6 +52,22 @@ const TRAITS = [
   'supportive with a sharp sense of timing',
 ]
 
+export const COMPANION_STAT_KEYS = [
+  'debugging',
+  'patience',
+  'chaos',
+  'wisdom',
+  'snark',
+]
+
+const RARITY_STAR_COUNT = {
+  common: 1,
+  uncommon: 2,
+  rare: 3,
+  epic: 4,
+  legendary: 5,
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const mascotSprite = loadSvgSpriteSet(join(__dirname, '..', '..', 'assets', 'claude-mascot.svg'))
 
@@ -93,6 +109,21 @@ function pick(items, seed) {
   return items[seed % items.length]
 }
 
+function statValue(seedText, label) {
+  const raw = hash(`${seedText}:${label}:stat`)
+  return 18 + (raw % 78)
+}
+
+function buildStats(seedText) {
+  return {
+    debugging: statValue(seedText, 'debugging'),
+    patience: statValue(seedText, 'patience'),
+    chaos: statValue(seedText, 'chaos'),
+    wisdom: statValue(seedText, 'wisdom'),
+    snark: statValue(seedText, 'snark'),
+  }
+}
+
 export function deterministicProfile(seedText = homedir()) {
   const seed = hash(`${seedText}:claude-buddy-open`)
   return {
@@ -106,6 +137,7 @@ export function deterministicProfile(seedText = homedir()) {
 export function createInitialState(seedText) {
   const profile = deterministicProfile(seedText)
   const now = Date.now()
+  const statsSeed = `${profile.name}:${profile.species}:${profile.rarity}`
   return {
     version: 3,
     companion: {
@@ -115,6 +147,7 @@ export function createInitialState(seedText) {
       affection: 1,
       muted: false,
       lastPetAt: now,
+      stats: buildStats(statsSeed),
     },
     runtime: {
       lastBubble: `${profile.name} hatched beside your terminal.`,
@@ -221,6 +254,17 @@ export function applyObservation(state, observation) {
 
 export function getCompanionAccent(state) {
   return SPECIES_COLORS[state.companion.species] || mascotSprite.accent
+}
+
+export function getRarityStars(rarity) {
+  const count = RARITY_STAR_COUNT[rarity] || 1
+  return '★'.repeat(count)
+}
+
+export function getCompanionStats(companion) {
+  if (companion?.stats) return companion.stats
+  const fallbackSeed = `${companion?.name || 'buddy'}:${companion?.species || 'robot'}:${companion?.rarity || 'common'}`
+  return buildStats(fallbackSeed)
 }
 
 function pickFrame(frames, now, intervalMs) {

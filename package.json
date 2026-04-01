@@ -1,0 +1,25 @@
+{
+  "name": "claude-buddy",
+  "version": "0.1.0",
+  "private": false,
+  "description": "A local-first terminal companion project inspired by Claude Code buddy.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "claude-buddy-open": "./src/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/claude-buddy.git"
+  },
+  "scripts": {
+    "dev": "node ./src/cli.js",
+    "pixel-editor": "node ./scripts/pixel-editor-server.mjs",
+    "build": "echo \"No build step required for the current TUI prototype\"",
+    "test": "echo \"Test suite not implemented yet\""
+  },
+  "dependencies": {
+    "ink": "^5.2.1",
+    "react": "^18.3.1"
+  }
+}

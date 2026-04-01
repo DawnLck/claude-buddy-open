@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claude Buddy Pixel Editor</title>
+    <style>
+      :root {
+        --bg: #111215;
+        --panel: #191b20;
+        --line: #30343d;
+        --text: #eceef2;
+        --muted: #a9afbb;
+        --accent: #d97757;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        background: radial-gradient(circle at 20% 10%, #1f232d, #0f1013 55%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .panel {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #1b1e25, #14161b);
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      button {
+        border: 1px solid #3e4551;
+        background: #232832;
+        color: var(--text);
+        border-radius: 8px;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      button.active {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      button:hover {
+        filter: brightness(1.07);
+      }
+      input[type="color"] {
+        width: 40px;
+        height: 32px;
+        border: 1px solid #3e4551;
+        border-radius: 6px;
+        padding: 0;
+        background: transparent;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .canvasWrap {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      canvas {
+        image-rendering: pixelated;
+        border: 1px solid var(--line);
+        background: #0f1117;
+        border-radius: 8px;
+      }
+      .preview {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 220px;
+      }
+      .status {
+        margin-left: auto;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="panel">
+        <h2 style="margin: 0 0 10px 0">Claude Buddy Pixel Editor</h2>
+        <div class="row">
+          <button id="toolDraw" class="active">Draw</button>
+          <button id="toolErase">Erase</button>
+          <button id="btnReload">Reload</button>
+          <button id="btnClear">Clear</button>
+          <button id="btnSave">Save SVG</button>
+          <label style="display:flex;gap:8px;align-items:center">
+            Fill
+            <input id="fillPicker" type="color" value="#d97757" />
+          </label>
+          <span id="status" class="status">Ready</span>
+        </div>
+        <div class="hint" style="margin-top:8px">
+          Grid: 24x24. Drag to paint. Saved file: <code>assets/claude-mascot.svg</code>
+        </div>
+      </div>
+
+      <div class="panel canvasWrap">
+        <canvas id="editor" width="576" height="576"></canvas>
+        <div class="preview">
+          <div style="margin-bottom:8px;color:var(--muted)">Terminal-scale preview</div>
+          <canvas id="preview" width="192" height="144"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const WIDTH = 24
+      const HEIGHT = 24
+      const SCALE = 24
+      const PREVIEW_SCALE = 8
+
+      const editor = document.getElementById('editor')
+      const preview = document.getElementById('preview')
+      const editorCtx = editor.getContext('2d')
+      const previewCtx = preview.getContext('2d')
+      const statusEl = document.getElementById('status')
+      const fillPicker = document.getElementById('fillPicker')
+      const toolDraw = document.getElementById('toolDraw')
+      const toolErase = document.getElementById('toolErase')
+      const btnReload = document.getElementById('btnReload')
+      const btnClear = document.getElementById('btnClear')
+      const btnSave = document.getElementById('btnSave')
+
+      let pixels = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(false))
+      let fill = '#d97757'
+      let mode = 'draw'
+      let drawing = false
+
+      function setStatus(text, isError = false) {
+        statusEl.textContent = text
+        statusEl.style.color = isError ? '#ef6464' : '#a9afbb'
+      }
+
+      function setMode(nextMode) {
+        mode = nextMode
+        toolDraw.classList.toggle('active', mode === 'draw')
+        toolErase.classList.toggle('active', mode === 'erase')
+      }
+
+      function paintAt(clientX, clientY) {
+        const rect = editor.getBoundingClientRect()
+        const x = Math.floor((clientX - rect.left) / SCALE)
+        const y = Math.floor((clientY - rect.top) / SCALE)
+        if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return
+        pixels[y][x] = mode === 'draw'
+        render()
+      }
+
+      function renderEditor() {
+        editorCtx.clearRect(0, 0, editor.width, editor.height)
+        editorCtx.fillStyle = '#0f1117'
+        editorCtx.fillRect(0, 0, editor.width, editor.height)
+
+        editorCtx.fillStyle = fill
+        for (let y = 0; y < HEIGHT; y += 1) {
+          for (let x = 0; x < WIDTH; x += 1) {
+            if (pixels[y][x]) {
+              editorCtx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE)
+            }
+          }
+        }
+
+        editorCtx.strokeStyle = 'rgba(112,119,133,0.45)'
+        editorCtx.lineWidth = 1
+        for (let x = 0; x <= WIDTH; x += 1) {
+          editorCtx.beginPath()
+          editorCtx.moveTo(x * SCALE + 0.5, 0)
+          editorCtx.lineTo(x * SCALE + 0.5, editor.height)
+          editorCtx.stroke()
+        }
+        for (let y = 0; y <= HEIGHT; y += 1) {
+          editorCtx.beginPath()
+          editorCtx.moveTo(0, y * SCALE + 0.5)
+          editorCtx.lineTo(editor.width, y * SCALE + 0.5)
+          editorCtx.stroke()
+        }
+      }
+
+      function renderPreview() {
+        previewCtx.clearRect(0, 0, preview.width, preview.height)
+        previewCtx.fillStyle = '#0f1117'
+        previewCtx.fillRect(0, 0, preview.width, preview.height)
+
+        previewCtx.fillStyle = fill
+        const offsetX = Math.floor((preview.width - WIDTH * PREVIEW_SCALE) / 2)
+        const offsetY = Math.floor((preview.height - HEIGHT * PREVIEW_SCALE) / 2)
+        for (let y = 0; y < HEIGHT; y += 1) {
+          for (let x = 0; x < WIDTH; x += 1) {
+            if (pixels[y][x]) {
+              previewCtx.fillRect(
+                offsetX + x * PREVIEW_SCALE,
+                offsetY + y * PREVIEW_SCALE,
+                PREVIEW_SCALE,
+                PREVIEW_SCALE,
+              )
+            }
+          }
+        }
+      }
+
+      function render() {
+        renderEditor()
+        renderPreview()
+      }
+
+      async function loadState() {
+        setStatus('Loading...')
+        const response = await fetch('/api/state')
+        if (!response.ok) throw new Error(`Load failed (${response.status})`)
+        const state = await response.json()
+        pixels = state.pixels
+        fill = state.fill || '#d97757'
+        fillPicker.value = fill
+        render()
+        setStatus('Loaded')
+      }
+
+      async function saveState() {
+        setStatus('Saving...')
+        const response = await fetch('/api/state', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ fill, pixels }),
+        })
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}))
+          throw new Error(error.error || `Save failed (${response.status})`)
+        }
+        setStatus('Saved')
+      }
+
+      editor.addEventListener('mousedown', event => {
+        drawing = true
+        paintAt(event.clientX, event.clientY)
+      })
+      editor.addEventListener('mousemove', event => {
+        if (!drawing) return
+        paintAt(event.clientX, event.clientY)
+      })
+      window.addEventListener('mouseup', () => {
+        drawing = false
+      })
+
+      toolDraw.addEventListener('click', () => setMode('draw'))
+      toolErase.addEventListener('click', () => setMode('erase'))
+      btnReload.addEventListener('click', () => loadState().catch(error => setStatus(error.message, true)))
+      btnSave.addEventListener('click', () => saveState().catch(error => setStatus(error.message, true)))
+      btnClear.addEventListener('click', () => {
+        pixels = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(false))
+        render()
+        setStatus('Cleared')
+      })
+      fillPicker.addEventListener('input', () => {
+        fill = fillPicker.value
+        render()
+      })
+
+      loadState().catch(error => setStatus(error.message, true))
+    </script>
+  </body>
+</html>

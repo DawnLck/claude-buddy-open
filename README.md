@@ -97,6 +97,16 @@ This repository now contains a working prototype. The next implementation phase 
 3. a more robust Claude Code event adapter
 4. tests around persistence, animation state, and observation logic
 
+### Releasing New Versions
+
+To release a new version, use the provided release helper:
+
+```bash
+python3 scripts/release.py [patch|minor|major]
+```
+
+This will update the `VERSION` file and `package.json`, then provide the necessary Git commands to tag and push the release.
+
 ## License
 
 MIT. See [LICENSE](./LICENSE).

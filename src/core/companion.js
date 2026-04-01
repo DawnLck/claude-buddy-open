@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadSvgSpriteSet } from './svgSprite.js'
@@ -69,7 +70,9 @@ const RARITY_STAR_COUNT = {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const mascotSprite = loadSvgSpriteSet(join(__dirname, '..', '..', 'assets', 'claude-mascot.svg'))
+const mascotSmallPath = join(__dirname, '..', '..', 'assets', 'claude-mascot-small.svg')
+const mascotDefaultPath = join(__dirname, '..', '..', 'assets', 'claude-mascot.svg')
+const mascotSprite = loadSvgSpriteSet(existsSync(mascotSmallPath) ? mascotSmallPath : mascotDefaultPath)
 
 export const SPRITE_VARIANTS = {
   ...mascotSprite.variants,

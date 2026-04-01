@@ -74,11 +74,61 @@ function StatsPanel({ companion, accent }) {
   )
 }
 
+function buildCodingRigLines(now, active) {
+  const frame = Math.floor(now / 170) % 4
+  const cursorFrames = ['_', '|', '_', ' ']
+  const keyFrames = ['== == ==', '== .. ==', '.. == ..', '== == ==']
+  const cursor = active ? cursorFrames[frame] : ' '
+  const keys = active ? keyFrames[frame] : '.. .. ..'
+
+  return [
+    ' .------. ',
+    ` |code${cursor}| `,
+    ' |______| ',
+    ` / ${keys} \\`,
+  ]
+}
+
+function getCodingRigState(state, now) {
+  const runtime = state.runtime || {}
+  const signalType = runtime.signalType || 'idle'
+  const recentSignalMs = runtime.lastEventAt ? now - runtime.lastEventAt : Number.POSITIVE_INFINITY
+
+  if (state.companion.muted) {
+    return { visible: false }
+  }
+
+  if (runtime.claudeActive) {
+    const lines = buildCodingRigLines(now, true)
+    return { visible: true, lines, color: 'cyan', suffix: '+ coding' }
+  }
+
+  if (signalType === 'process_up' && recentSignalMs < 1800) {
+    const lines = buildCodingRigLines(now, true)
+    return { visible: true, lines, color: 'blue', suffix: '+ booting' }
+  }
+
+  if (signalType === 'process_down' && recentSignalMs < 1600) {
+    const phase = Math.floor(recentSignalMs / 400)
+    const shutdownFrames = [
+      ['  .------. ', '  |code_| ', '  |______| ', ' / .. == .. \\'],
+      ['  .------. ', '  |code | ', '  |______| ', ' / .. .. .. \\'],
+      ['  .------. ', '  |    _| ', '  |______| ', ' / .. .. .. \\'],
+      ['  .------. ', '  |_____| ', '  |______| ', ' / ....... \\'],
+    ]
+    const lines = shutdownFrames[Math.min(phase, shutdownFrames.length - 1)]
+    return { visible: true, lines, color: 'gray', suffix: '+ shutting down' }
+  }
+
+  return { visible: false }
+}
+
 function SpritePanel({ state, now }) {
   const accent = getCompanionAccent(state)
   const lines = getSpriteLines(state, now)
   const renderState = getSpriteRenderState(state, now)
-  const label = renderState.label || 'idle'
+  const rig = getCodingRigState(state, now)
+  const label = `${renderState.label || 'idle'} ${rig.suffix || ''}`.trim()
 
   return h(
     Box,
@@ -91,8 +141,28 @@ function SpritePanel({ state, now }) {
     },
     h(Text, { bold: true, color: accent }, state.companion.name),
     h(Text, { dimColor: true }, `${state.companion.species} companion`),
-    ...lines.map((line, index) =>
-      h(Text, { key: `${index}:${line}`, color: accent }, line),
+    h(
+      Box,
+      {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+      },
+      rig.visible
+        ? h(
+            Box,
+            { flexDirection: 'column' },
+            ...rig.lines.map((line, index) =>
+              h(Text, { key: `rig:${index}:${line}`, color: rig.color || 'cyan' }, line),
+            ),
+          )
+        : null,
+      h(
+        Box,
+        { flexDirection: 'column', marginLeft: rig.visible ? 0 : 0 },
+        ...lines.map((line, index) =>
+          h(Text, { key: `${index}:${line}`, color: accent }, line),
+        ),
+      ),
     ),
     h(Text, { dimColor: true }, label),
   )

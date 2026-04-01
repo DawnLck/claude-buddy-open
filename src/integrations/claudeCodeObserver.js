@@ -39,8 +39,7 @@ function isClaudeRunning() {
         line =>
           line.includes(' claude') ||
           line.includes('/claude ') ||
-          line.includes('node cli.js') ||
-          line.includes('claude-buddy'),
+          line.includes('node cli.js'),
       )
   } catch {
     return false

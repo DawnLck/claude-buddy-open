@@ -146,12 +146,40 @@ function shiftGrid(grid, offsetX, offsetY) {
   return shifted
 }
 
-function squashFeet(grid) {
+function squashFeet(grid, boxes) {
   const next = cloneGrid(grid)
-  fillRect(next, 4, 21, 4, 3, false)
-  fillRect(next, 16, 21, 4, 3, false)
-  fillRect(next, 5, 20, 2, 2, true)
-  fillRect(next, 17, 20, 2, 2, true)
+  fillRect(
+    next,
+    boxes.leftLegCutX,
+    boxes.legCutY,
+    boxes.legCutWidth,
+    boxes.legCutHeight,
+    false,
+  )
+  fillRect(
+    next,
+    boxes.rightLegCutX,
+    boxes.legCutY,
+    boxes.legCutWidth,
+    boxes.legCutHeight,
+    false,
+  )
+  fillRect(
+    next,
+    boxes.leftLegRestoreX,
+    boxes.legRestoreY,
+    boxes.legRestoreWidth,
+    boxes.legRestoreHeight,
+    true,
+  )
+  fillRect(
+    next,
+    boxes.rightLegRestoreX,
+    boxes.legRestoreY,
+    boxes.legRestoreWidth,
+    boxes.legRestoreHeight,
+    true,
+  )
   return next
 }
 
@@ -185,16 +213,93 @@ function trimVerticalWhitespace(lines) {
   return lines.slice(start, end + 1)
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function featureBoxes(width, height) {
+  const eyeWidth = Math.max(1, Math.round((2 / 24) * width))
+  const eyeHeight = Math.max(1, Math.round((3 / 24) * height))
+  const eyeY = clamp(Math.round((8 / 24) * height), 0, height - eyeHeight)
+  const leftEyeX = clamp(Math.round((6 / 24) * width), 0, width - eyeWidth)
+  const rightEyeX = clamp(
+    Math.round((16 / 24) * width),
+    0,
+    width - eyeWidth,
+  )
+
+  const legCutY = clamp(Math.round((20 / 24) * height), 0, height - 1)
+  const legCutHeight = Math.max(1, height - legCutY)
+  const legCutWidth = Math.max(1, Math.round((4 / 24) * width))
+  const leftLegCutX = clamp(Math.round((4 / 24) * width), 0, width - legCutWidth)
+  const rightLegCutX = clamp(Math.round((16 / 24) * width), 0, width - legCutWidth)
+
+  const legRestoreWidth = Math.max(1, Math.round((2 / 24) * width))
+  const legRestoreHeight = Math.max(1, Math.round((2 / 24) * height))
+  const leftLegRestoreX = clamp(Math.round((5 / 24) * width), 0, width - legRestoreWidth)
+  const rightLegRestoreX = clamp(Math.round((17 / 24) * width), 0, width - legRestoreWidth)
+  const legRestoreY = clamp(Math.round((20 / 24) * height), 0, height - legRestoreHeight)
+
+  return {
+    leftEyeX,
+    rightEyeX,
+    eyeY,
+    eyeWidth,
+    eyeHeight,
+    leftLegCutX,
+    rightLegCutX,
+    legCutY,
+    legCutWidth,
+    legCutHeight,
+    leftLegRestoreX,
+    rightLegRestoreX,
+    legRestoreY,
+    legRestoreWidth,
+    legRestoreHeight,
+  }
+}
+
 export function loadSvgSpriteSet(svgPath) {
   const svgText = readFileSync(svgPath, 'utf8')
   const { width, height, pathData, fill } = parseSvg(svgText)
   const baseGrid = rasterizeEvenOdd(parsePathSubpaths(pathData), width, height)
+  const boxes = featureBoxes(width, height)
 
   const blinkGrid = cloneGrid(baseGrid)
-  fillRect(blinkGrid, 6, 8, 2, 3, true)
-  fillRect(blinkGrid, 16, 8, 2, 3, true)
-  fillRect(blinkGrid, 6, 9, 2, 1, false)
-  fillRect(blinkGrid, 16, 9, 2, 1, false)
+  const blinkWidth = Math.max(2, boxes.eyeWidth + 1)
+  const blinkHeight = Math.max(2, boxes.eyeHeight + 1)
+  const blinkTop = clamp(boxes.eyeY - 1, 0, height - blinkHeight)
+  const leftBlinkX = clamp(
+    boxes.leftEyeX - Math.floor((blinkWidth - boxes.eyeWidth) / 2),
+    0,
+    width - blinkWidth,
+  )
+  const rightBlinkX = clamp(
+    boxes.rightEyeX - Math.floor((blinkWidth - boxes.eyeWidth) / 2),
+    0,
+    width - blinkWidth,
+  )
+
+  // Blink effect: close the eye cavity first, then carve a thin horizontal slit.
+  fillRect(blinkGrid, leftBlinkX, blinkTop, blinkWidth, blinkHeight, true)
+  fillRect(blinkGrid, rightBlinkX, blinkTop, blinkWidth, blinkHeight, true)
+  const blinkSlitY = clamp(blinkTop + Math.floor(blinkHeight / 2), 0, height - 1)
+  fillRect(
+    blinkGrid,
+    leftBlinkX,
+    blinkSlitY,
+    blinkWidth,
+    1,
+    false,
+  )
+  fillRect(
+    blinkGrid,
+    rightBlinkX,
+    blinkSlitY,
+    blinkWidth,
+    1,
+    false,
+  )
 
   // Keep focused shape aligned with source raster silhouette.
   const focusedGrid = cloneGrid(baseGrid)
@@ -204,14 +309,35 @@ export function loadSvgSpriteSet(svgPath) {
   const focusedLiftGrid = shiftGrid(baseGrid, 0, -1)
   const focusedDropGrid = shiftGrid(baseGrid, 0, 1)
 
-  const petGrid = squashFeet(shiftGrid(baseGrid, 1, 0))
+  const petGrid = squashFeet(shiftGrid(baseGrid, 1, 0), boxes)
 
   const mutedGrid = cloneGrid(baseGrid)
-  fillRect(mutedGrid, 6, 8, 2, 3, false)
-  fillRect(mutedGrid, 16, 8, 2, 3, false)
-  fillRect(mutedGrid, 6, 9, 2, 1, true)
-  fillRect(mutedGrid, 16, 9, 2, 1, true)
-  fillRect(mutedGrid, 4, 20, 16, 4, false)
+  fillRect(mutedGrid, boxes.leftEyeX, boxes.eyeY, boxes.eyeWidth, boxes.eyeHeight, false)
+  fillRect(mutedGrid, boxes.rightEyeX, boxes.eyeY, boxes.eyeWidth, boxes.eyeHeight, false)
+  fillRect(
+    mutedGrid,
+    boxes.leftEyeX,
+    clamp(boxes.eyeY + 1, 0, height - 1),
+    boxes.eyeWidth,
+    1,
+    true,
+  )
+  fillRect(
+    mutedGrid,
+    boxes.rightEyeX,
+    clamp(boxes.eyeY + 1, 0, height - 1),
+    boxes.eyeWidth,
+    1,
+    true,
+  )
+  fillRect(
+    mutedGrid,
+    boxes.leftLegCutX,
+    boxes.legCutY,
+    width - boxes.leftLegCutX * 2,
+    Math.max(1, Math.round((4 / 24) * height)),
+    false,
+  )
 
   const renderVariant = grid => trimVerticalWhitespace(renderGridToTerminal(grid))
 
